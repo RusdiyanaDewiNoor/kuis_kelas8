@@ -1,0 +1,1077 @@
+<!doctype html>
+<html lang="id" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Petualangan Labirin Berpikir Komputasional</title>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="/_sdk/data_sdk.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      box-sizing: border-box;
+    }
+    
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');
+    
+    * {
+      font-family: 'Poppins', sans-serif;
+    }
+    
+    .checkpoint {
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    
+    .checkpoint:hover {
+      transform: scale(1.1);
+    }
+    
+    .checkpoint.completed {
+      animation: bounce 0.5s ease;
+    }
+    
+    .checkpoint.locked {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    
+    .path-line {
+      stroke-dasharray: 10;
+      animation: dash 30s linear infinite;
+    }
+    
+    @keyframes dash {
+      to {
+        stroke-dashoffset: 1000;
+      }
+    }
+    
+    @keyframes bounce {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+    }
+    
+    .draggable {
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+    }
+    
+    .draggable.dragging {
+      opacity: 0.5;
+      cursor: grabbing;
+    }
+    
+    .drop-zone {
+      transition: all 0.3s ease;
+    }
+    
+    .drop-zone.drag-over {
+      transform: scale(1.05);
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+    }
+    
+    .fade-in {
+      animation: fadeIn 0.5s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .stack-plate {
+      animation: stackPush 0.3s ease;
+    }
+    
+    @keyframes stackPush {
+      from { transform: translateY(-20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    
+    .queue-person {
+      animation: queueMove 0.5s ease;
+    }
+    
+    @keyframes queueMove {
+      from { transform: translateX(-30px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    
+    textarea {
+      resize: vertical;
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+ </head>
+ <body class="h-full overflow-auto">
+  <div id="app" class="w-full h-full"></div>
+  <script>
+    const defaultConfig = {
+      background_color: "#eff6ff",
+      surface_color: "#ffffff",
+      text_color: "#1e293b",
+      primary_action_color: "#3b82f6",
+      secondary_action_color: "#64748b",
+      font_family: "Poppins",
+      font_size: 16,
+      main_title: "Petualangan Labirin Berpikir Komputasional",
+      subtitle: "Dari Kelas Menuju Pintu Keluar - Kelas 8 SMP",
+      instruction_text: "Selesaikan setiap checkpoint untuk membuka rute berikutnya!",
+      completion_message: "Selamat! Kamu berhasil keluar dari labirin!"
+    };
+
+    let config = {};
+    let currentView = 'maze';
+    let currentCheckpoint = 0;
+    let checkpointStatus = [false, false, false, false, false, false];
+    let userAnswers = [];
+    let currentSubQuestion = 0;
+    let textAreaAnswer = '';
+    
+    const checkpoints = [
+      {
+        id: "cp1",
+        icon: "🌱",
+        title: "Checkpoint 1: Fungsi Linear",
+        subtitle: "Pola Pertumbuhan Tanaman",
+        position: { x: 15, y: 75 },
+        type: "pattern_completion",
+        question: "Seorang petani menanam bibit pohon mangga. Setiap minggu, tinggi pohon bertambah secara teratur. Perhatikan pola pertumbuhan berikut!",
+        tableData: [
+          { minggu: 1, tinggi: 15 },
+          { minggu: 2, tinggi: 25 },
+          { minggu: 3, tinggi: 35 },
+          { minggu: 4, tinggi: 45 }
+        ],
+        subQuestions: [
+          {
+            type: "multiple_choice",
+            question: "Berapa tinggi pohon pada minggu ke-6?",
+            options: ["55 cm", "60 cm", "65 cm", "70 cm"],
+            correctAnswer: 2,
+            errorExplanation: "❌ Perhatikan polanya! Tinggi pohon bertambah <strong>10 cm setiap minggu</strong>.<br><br>📊 Data: Minggu 1=15cm, Minggu 2=25cm (+10), Minggu 3=35cm (+10), Minggu 4=45cm (+10).<br><br>Jadi Minggu 5 = 55cm, dan <strong>Minggu 6 = 65cm</strong>."
+          },
+          {
+            type: "multiple_choice",
+            question: "Bagaimana komputer memahami pola fungsi linear dari data tabel tersebut?",
+            options: [
+              "Komputer menghitung selisih antar data berurutan, jika selisih tetap konstan maka itu pola linear",
+              "Komputer menghitung jumlah semua data lalu dibagi dengan banyak data",
+              "Komputer mengalikan semua data lalu mencari rata-ratanya",
+              "Komputer membandingkan data pertama dan terakhir saja"
+            ],
+            correctAnswer: 0,
+            errorExplanation: "❌ Komputer mengenali pola linear dengan cara <strong>menghitung SELISIH</strong> antar data berurutan.<br><br>Contoh: 25-15=<strong>10</strong>, 35-25=<strong>10</strong>, 45-35=<strong>10</strong>.<br><br>Karena selisihnya <strong>TETAP/KONSTAN</strong>, komputer tahu ini pola linear!"
+          }
+        ],
+        explanation: "✅ **Pola**: tinggi bertambah 10 cm setiap minggu. Rumus: h = 10n + 5. Minggu 6: h = 10(6) + 5 = **65 cm**.\n\n🧠 **Berpikir Komputasional (Pengenalan Pola)**:\nKomputer mencari pola dengan menghitung **SELISIH** antar data berurutan (25-15=10, 35-25=10, 45-35=10). Karena selisih **TETAP/KONSTAN** (10), komputer tahu ini pola linear. Lalu komputer cari nilai awal (saat minggu 0 = 5) dan buat rumus umum."
+      },
+      {
+        id: "cp2",
+        icon: "🧪",
+        title: "Checkpoint 2: Himpunan",
+        subtitle: "Laboratorium Pewarna Bu Rani",
+        position: { x: 30, y: 60 },
+        type: "logic_puzzle",
+        question: "Bu Rani, guru kimia, memiliki 5 jenis pewarna khusus untuk eksperimen. Ia menyimpan pewarna di 6 botol (A-F). **Satu botol berisi air biasa**.",
+        pupukList: [
+          "🔴 Mengubah warna merah",
+          "🔵 Mengubah warna biru",
+          "🟡 Mengubah warna kuning",
+          "⭐ Membuat berkilau",
+          "🌀 Membuat efek spiral"
+        ],
+        tanamanAwal: "Kertas putih polos tanpa efek",
+        percobaan: [
+          { nama: "Percobaan 1", gelas: "A + B + C", hasil: "🔴 Warna merah + 🔵 Warna biru + ⭐ Berkilau" },
+          { nama: "Percobaan 2", gelas: "A + D + E", hasil: "🔴 Warna merah + 🟡 Warna kuning + 🌀 Efek spiral" },
+          { nama: "Percobaan 3", gelas: "C + D + F", hasil: "⭐ Berkilau + 🟡 Warna kuning" }
+        ],
+        subQuestions: [
+          {
+            type: "multiple_choice",
+            question: "Botol mana yang berisi AIR BIASA (tidak ada efek)?",
+            options: ["Botol A", "Botol B", "Botol C", "Botol D", "Botol E", "Botol F"],
+            correctAnswer: 5,
+            errorExplanation: "❌ Coba analisis setiap percobaan dengan hati-hati!<br><br>💡 <strong>Petunjuk</strong>: Bandingkan percobaan yang memiliki botol yang sama. Botol yang muncul di P1 dan P2 pasti menghasilkan efek yang sama di keduanya.<br><br>🔍 Botol <strong>F hanya muncul di P3</strong>, tapi P3 tidak menambah efek baru yang belum ada di botol C dan D. Jadi F = AIR BIASA!"
+          }
+        ],
+        explanation: "✅ **Analisis Himpunan** (Dekomposisi & Abstraksi):\n\n• **Percobaan 1** (A∪B∪C): {merah, biru, kilau}\n• **Percobaan 2** (A∪D∪E): {merah, kuning, spiral}\n• **Percobaan 3** (C∪D∪F): {kilau, kuning}\n\n**Irisan P1 dan P2**: A muncul di keduanya → **A = merah** ✓\n**P1 tanpa A**: B∪C = {biru, kilau}\n**P3 ada C**: C menghasilkan kilau → **C = kilau** ✓\n**Maka**: **B = biru** ✓\n**P2 tanpa A**: D∪E = {kuning, spiral}\n**P3 ada D**: D menghasilkan kuning → **D = kuning** ✓\n**Maka**: **E = spiral** ✓\n**F tidak punya efek di P3** → **F = AIR BIASA** ✓✓✓"
+      },
+      {
+        id: "cp3",
+        icon: "🔢",
+        title: "Checkpoint 3: Konversi Biner",
+        subtitle: "Desimal → Biner",
+        position: { x: 50, y: 45 },
+        type: "conversion_steps",
+        question: "Komputer hanya memahami bahasa biner (0 dan 1). Mari konversi bilangan desimal **29** ke biner dengan algoritma **BAGI-CATAT-BALIK**!",
+        conversionNumber: 29,
+        subQuestions: [
+          {
+            type: "drag_drop",
+            question: "Susun langkah konversi dengan benar:",
+            items: [
+              { id: "s1", text: "29 ÷ 2 = 14 sisa 1", order: 1 },
+              { id: "s2", text: "14 ÷ 2 = 7 sisa 0", order: 2 },
+              { id: "s3", text: "7 ÷ 2 = 3 sisa 1", order: 3 },
+              { id: "s4", text: "3 ÷ 2 = 1 sisa 1", order: 4 },
+              { id: "s5", text: "1 ÷ 2 = 0 sisa 1", order: 5 },
+              { id: "s6", text: "Baca sisa dari BAWAH ke ATAS: 11101", order: 6 }
+            ],
+            correctOrder: ["s1", "s2", "s3", "s4", "s5", "s6"],
+            errorExplanation: "❌ Urutan pembagian salah!<br><br>💡 <strong>Algoritma</strong>: Mulai dari bilangan awal (29), lalu bagi 2 terus sampai hasil bagi = 0.<br><br>Urutan: 29→14→7→3→1→0, lalu baca sisanya dari bawah ke atas."
+          },
+          {
+            type: "multiple_choice",
+            question: "Hasil konversi 29₁₀ ke biner adalah...",
+            options: ["11011₂", "11101₂", "10111₂", "11110₂"],
+            correctAnswer: 1,
+            errorExplanation: "❌ Ingat! Baca sisa pembagian dari <strong>BAWAH ke ATAS</strong>.<br><br>📝 Sisa: 1 (29÷2), 0 (14÷2), 1 (7÷2), 1 (3÷2), 1 (1÷2).<br><br>Baca dari bawah: <strong>11101₂</strong>"
+          }
+        ],
+        explanation: "✅ **Algoritma Konversi** (Berpikir Komputasional):\n\n1. **DEKOMPOSISI**: Pecah bilangan dengan pembagian berulang\n2. **PENGENALAN POLA**: Pola 'bagi 2, catat sisa' berulang sampai hasil bagi = 0\n3. **ABSTRAKSI**: Fokus pada SISA pembagian (0 atau 1)\n4. **ALGORITMA**: Baca sisa dari akhir ke awal\n\n**29₁₀ = 11101₂** ✓"
+      },
+      {
+        id: "cp4",
+        icon: "💡",
+        title: "Checkpoint 4: Konversi Desimal",
+        subtitle: "Biner → Desimal",
+        position: { x: 65, y: 30 },
+        type: "visual_calculation",
+        question: "Sebuah lampu pintar memiliki 6 saklar (ON=1, OFF=0). Pola saklar: **101011**. Berapa nilai desimalnya?",
+        binerData: {
+          biner: "101011",
+          visual: ["💡", "⚫", "💡", "⚫", "💡", "💡"],
+          posisi: [32, 16, 8, 4, 2, 1]
+        },
+        subQuestions: [
+          {
+            type: "multiple_choice",
+            question: "Hitung nilai desimal dengan cara: (1×32) + (0×16) + (1×8) + (0×4) + (1×2) + (1×1)",
+            options: ["41₁₀", "43₁₀", "45₁₀", "47₁₀"],
+            correctAnswer: 1,
+            errorExplanation: "❌ Coba hitung lagi dengan teliti!<br><br>💡 <strong>Langkah</strong>: Kalikan setiap digit dengan pangkat 2 sesuai posisi.<br><br>💡 (1×32) + (0×16) + (1×8) + (0×4) + (1×2) + (1×1) = 32 + 0 + 8 + 0 + 2 + 1 = <strong>43</strong>"
+          },
+          {
+            type: "multiple_choice",
+            question: "Langkah berpikir komputasional yang digunakan adalah...",
+            options: [
+              "Dekomposisi (pecah per digit) + Abstraksi (fokus posisi bernilai 1)",
+              "Hanya pengenalan pola",
+              "Hanya algoritma perkalian",
+              "Hanya dekomposisi"
+            ],
+            correctAnswer: 0,
+            errorExplanation: "❌ Ingat konsep berpikir komputasional!<br><br>💡 Kita menggunakan <strong>DEKOMPOSISI</strong> (memecah setiap digit) dan <strong>ABSTRAKSI</strong> (fokus hanya pada digit bernilai 1).<br><br>Ini kombinasi dua langkah berpikir komputasional!"
+          }
+        ],
+        explanation: "✅ **Algoritma Konversi Biner→Desimal**:\n\n**DEKOMPOSISI**: Pecah setiap digit biner\n**ABSTRAKSI**: Digit 1 dikali dengan pangkat 2 sesuai posisi\n**ALGORITMA**: Jumlahkan semua hasil kali\n\n💡⚫💡⚫💡💡\n**101011₂** = 32 + 0 + 8 + 0 + 2 + 1 = **43₁₀** ✓"
+      },
+      {
+        id: "cp5",
+        icon: "🎯",
+        title: "Checkpoint 5: Konversi Oktal",
+        subtitle: "Oktal → Desimal",
+        position: { x: 75, y: 15 },
+        type: "octal_conversion",
+        question: "Sistem oktal (basis 8) digunakan dalam pemrograman. Mari konversi **157₈** ke desimal!",
+        oktalData: {
+          oktal: "157₈",
+          posisi: ["8² = 64", "8¹ = 8", "8⁰ = 1"],
+          digit: [1, 5, 7]
+        },
+        subQuestions: [
+          {
+            type: "drag_drop",
+            question: "Susun langkah perhitungan:",
+            items: [
+              { id: "o1", text: "Digit 1 di posisi 8² = 1 × 64 = 64", order: 1 },
+              { id: "o2", text: "Digit 5 di posisi 8¹ = 5 × 8 = 40", order: 2 },
+              { id: "o3", text: "Digit 7 di posisi 8⁰ = 7 × 1 = 7", order: 3 },
+              { id: "o4", text: "Jumlahkan: 64 + 40 + 7 = 111", order: 4 }
+            ],
+            correctOrder: ["o1", "o2", "o3", "o4"],
+            errorExplanation: "❌ Urutan perhitungan salah!<br><br>💡 <strong>Urutan</strong>: Mulai dari digit paling KIRI (posisi tertinggi) ke KANAN (posisi terendah).<br><br>Dari kiri: 1×64, lalu 5×8, lalu 7×1, terakhir jumlahkan!"
+          },
+          {
+            type: "multiple_choice",
+            question: "Hasil 157₈ dalam desimal adalah...",
+            options: ["109₁₀", "111₁₀", "115₁₀", "157₁₀"],
+            correctAnswer: 1,
+            errorExplanation: "❌ Coba hitung lagi!<br><br>💡 <strong>Rumus</strong>: (digit × basis^posisi) untuk setiap digit.<br><br>157₈ = (1×64) + (5×8) + (7×1) = 64 + 40 + 7 = <strong>111₁₀</strong>"
+          }
+        ],
+        explanation: "✅ **Pola Konversi Oktal** (Pengenalan Pola):\n\n**POLA UMUM**: Setiap basis menggunakan pangkat basis\n• Biner (basis 2): 2⁰, 2¹, 2², ...\n• Oktal (basis 8): 8⁰, 8¹, 8², ...\n• Desimal (basis 10): 10⁰, 10¹, 10², ...\n\n**ALGORITMA**: digit × (basis^posisi), lalu jumlahkan\n\n**157₈** = (1×64) + (5×8) + (7×1) = **111₁₀** ✓"
+      },
+      {
+        id: "cp6",
+        icon: "🍽️",
+        title: "Checkpoint 6: Struktur Data",
+        subtitle: "LIFO & FIFO",
+        position: { x: 85, y: 5 },
+        type: "data_structure",
+        question: "Bu Siti mengajarkan konsep struktur data dengan contoh nyata di kehidupan sehari-hari. Mari kita pelajari **LIFO** (Last In, First Out) dan **FIFO** (First In, First Out)!",
+        structureData: {
+          lifo: {
+            title: "🍽️ LIFO: Tumpukan Piring",
+            description: "Saat mencuci piring, piring yang terakhir ditumpuk akan diambil pertama kali.",
+            scenario: "Ibu menumpuk 4 piring secara berurutan: Piring Merah → Piring Biru → Piring Hijau → Piring Kuning",
+            visual: ["🔴", "🔵", "🟢", "🟡"],
+            order: ["Merah (pertama)", "Biru (kedua)", "Hijau (ketiga)", "Kuning (terakhir)"]
+          },
+          fifo: {
+            title: "👥 FIFO: Antrian Kasir",
+            description: "Di kasir supermarket, orang yang datang pertama akan dilayani pertama kali.",
+            scenario: "4 orang mengantri di kasir: Andi → Budi → Citra → Deni",
+            visual: ["👨", "👦", "👧", "🧑"],
+            order: ["Andi (pertama datang)", "Budi (kedua)", "Citra (ketiga)", "Deni (terakhir)"]
+          }
+        },
+        subQuestions: [
+          {
+            type: "multiple_choice",
+            question: "**LIFO - Tumpukan Piring** 🍽️\n\nIbu menumpuk piring: Merah → Biru → Hijau → Kuning (dari bawah ke atas).\n\nJika Ibu mengambil 2 piring dari tumpukan, piring apa saja yang diambil dan urutannya?",
+            options: [
+              "Kuning, lalu Hijau",
+              "Merah, lalu Biru", 
+              "Hijau, lalu Kuning",
+              "Merah, lalu Kuning"
+            ],
+            correctAnswer: 0,
+            errorExplanation: "❌ Ingat prinsip LIFO: <strong>Last In, First Out</strong> (Yang terakhir masuk, keluar pertama)!<br><br>💡 <strong>Konsep</strong>: Seperti tumpukan piring, yang paling atas (terakhir ditumpuk) akan diambil duluan.<br><br>🍽️ Urutan tumpukan dari bawah: Merah → Biru → Hijau → <strong>Kuning (paling atas)</strong><br><br>Jadi diambil: <strong>Kuning dulu</strong>, lalu <strong>Hijau</strong>!"
+          },
+          {
+            type: "multiple_choice",
+            question: "**FIFO - Antrian Kasir** 👥\n\nDi kasir ada antrian: Andi (depan) → Budi → Citra → Deni (belakang).\n\nJika kasir melayani 2 orang, siapa saja yang dilayani dan urutannya?",
+            options: [
+              "Andi, lalu Budi",
+              "Deni, lalu Citra",
+              "Budi, lalu Andi",
+              "Citra, lalu Deni"
+            ],
+            correctAnswer: 0,
+            errorExplanation: "❌ Ingat prinsip FIFO: <strong>First In, First Out</strong> (Yang pertama masuk, keluar pertama)!<br><br>💡 <strong>Konsep</strong>: Seperti antrian, yang paling depan (datang pertama) dilayani duluan.<br><br>👥 Urutan antrian: <strong>Andi (depan)</strong> → Budi → Citra → Deni (belakang)<br><br>Jadi dilayani: <strong>Andi dulu</strong>, lalu <strong>Budi</strong>!"
+          }
+        ],
+        explanation: "✅ **Struktur Data** - Berpikir Komputasional:\n\n**1. LIFO (Stack - Tumpukan)**\n• Prinsip: Last In, First Out\n• Contoh: Tumpukan piring, tumpukan buku, tombol Undo/Redo\n• Operasi: PUSH (tambah di atas), POP (ambil dari atas)\n• Visualisasi: Seperti tumpukan - yang terakhir ditaruh, diambil pertama\n\n**2. FIFO (Queue - Antrian)**\n• Prinsip: First In, First Out\n• Contoh: Antrian kasir, antrian printer, pemrosesan tugas komputer\n• Operasi: ENQUEUE (masuk dari belakang), DEQUEUE (keluar dari depan)\n• Visualisasi: Seperti antrian - yang pertama datang, dilayani pertama\n\n**Berpikir Komputasional:**\n• **ABSTRAKSI**: Fokus pada urutan masuk-keluar data\n• **ALGORITMA**: Tentukan aturan akses data (LIFO atau FIFO)\n• **DEKOMPOSISI**: Pecah proses jadi langkah sederhana"
+      }
+    ];
+
+    function initializeApp() {
+      renderView();
+    }
+
+    function renderView() {
+      if (currentView === 'maze') {
+        renderMaze();
+      } else {
+        renderQuestion();
+      }
+    }
+
+    function renderMaze() {
+      const app = document.getElementById('app');
+      const customFont = config.font_family || defaultConfig.font_family;
+      const baseSize = config.font_size || defaultConfig.font_size;
+      const baseFontStack = 'sans-serif';
+      
+      const backgroundColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+      
+      const mainTitle = config.main_title || defaultConfig.main_title;
+      const subtitle = config.subtitle || defaultConfig.subtitle;
+      const instructionText = config.instruction_text || defaultConfig.instruction_text;
+      
+      app.style.backgroundColor = backgroundColor;
+      app.style.color = textColor;
+      app.style.fontFamily = `${customFont}, ${baseFontStack}`;
+      app.style.fontSize = `${baseSize}px`;
+      app.style.minHeight = '100%';
+      
+      const completedCount = checkpointStatus.filter(s => s).length;
+      
+      app.innerHTML = `
+        <div class="w-full h-full flex flex-col">
+          <header style="background-color: ${surfaceColor}; padding: 20px 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <div style="max-width: 1400px; margin: 0 auto;">
+              <h1 style="font-size: ${baseSize * 1.75}px; font-weight: 700; margin-bottom: 8px; color: ${textColor};">${mainTitle}</h1>
+              <p style="font-size: ${baseSize * 0.875}px; color: ${textColor}; opacity: 0.7; margin-bottom: 12px;">${subtitle}</p>
+              <p style="font-size: ${baseSize}px; color: ${primaryColor}; font-weight: 600;">🎯 ${instructionText}</p>
+              <div style="margin-top: 12px; display: flex; align-items: center; gap: 12px;">
+                <div style="flex: 1; background-color: ${backgroundColor}; height: 10px; border-radius: 9999px; overflow: hidden;">
+                  <div style="background-color: ${primaryColor}; height: 100%; width: ${(completedCount / 6) * 100}%; transition: width 0.5s ease;"></div>
+                </div>
+                <span style="font-size: ${baseSize * 0.875}px; font-weight: 700; color: ${primaryColor};">${completedCount}/6</span>
+              </div>
+            </div>
+          </header>
+          
+          <main class="flex-1 overflow-auto p-8" style="background: linear-gradient(135deg, ${backgroundColor} 0%, #e0f2fe 100%);">
+            <div style="max-width: 1200px; margin: 0 auto; position: relative; height: 600px; background-color: ${surfaceColor}; border-radius: 24px; padding: 40px; box-shadow: 0 10px 40px rgba(0,0,0,0.1);">
+              
+              <svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;">
+                <path d="M 50 550 Q 100 520, 150 500" stroke="${primaryColor}" stroke-width="4" fill="none" class="path-line" opacity="0.3"/>
+                <path d="M 180 450 Q 250 420, 320 380" stroke="${primaryColor}" stroke-width="4" fill="none" class="path-line" opacity="${checkpointStatus[0] ? '0.3' : '0.1'}"/>
+                <path d="M 360 360 Q 450 320, 550 280" stroke="${primaryColor}" stroke-width="4" fill="none" class="path-line" opacity="${checkpointStatus[1] ? '0.3' : '0.1'}"/>
+                <path d="M 600 270 Q 680 220, 720 190" stroke="${primaryColor}" stroke-width="4" fill="none" class="path-line" opacity="${checkpointStatus[2] ? '0.3' : '0.1'}"/>
+                <path d="M 780 180 Q 850 130, 880 100" stroke="${primaryColor}" stroke-width="4" fill="none" class="path-line" opacity="${checkpointStatus[3] ? '0.3' : '0.1'}"/>
+                <path d="M 900 90 Q 980 50, 1020 40" stroke="${primaryColor}" stroke-width="4" fill="none" class="path-line" opacity="${checkpointStatus[4] ? '0.3' : '0.1'}"/>
+              </svg>
+              
+              <div style="position: absolute; left: 2%; bottom: 5%; text-align: center;">
+                <div style="font-size: ${baseSize * 3}px; margin-bottom: 8px;">🏫</div>
+                <div style="font-size: ${baseSize * 0.75}px; font-weight: 700; color: ${textColor};">START<br/>Dalam Kelas</div>
+              </div>
+              
+              ${checkpoints.map((cp, index) => {
+                const isLocked = index > 0 && !checkpointStatus[index - 1];
+                const isCompleted = checkpointStatus[index];
+                return `
+                  <div 
+                    class="checkpoint ${isLocked ? 'locked' : ''} ${isCompleted ? 'completed' : ''}"
+                    data-index="${index}"
+                    style="position: absolute; left: ${cp.position.x}%; top: ${cp.position.y}%; text-align: center; ${isLocked ? 'pointer-events: none;' : ''}"
+                  >
+                    <div style="position: relative;">
+                      <div style="font-size: ${baseSize * 3.5}px; margin-bottom: 8px; filter: ${isLocked ? 'grayscale(100%)' : 'none'};">
+                        ${cp.icon}
+                        ${isCompleted ? '<div style="position: absolute; top: -5px; right: -5px; font-size: ' + (baseSize * 1.5) + 'px;">✅</div>' : ''}
+                        ${isLocked ? '<div style="position: absolute; top: -5px; right: -5px; font-size: ' + (baseSize * 1.5) + 'px;">🔒</div>' : ''}
+                      </div>
+                      <div style="background-color: ${surfaceColor}; padding: 8px 16px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 120px;">
+                        <div style="font-size: ${baseSize * 0.75}px; font-weight: 700; color: ${primaryColor}; margin-bottom: 4px;">Checkpoint ${index + 1}</div>
+                        <div style="font-size: ${baseSize * 0.7}px; color: ${textColor}; opacity: 0.8;">${cp.subtitle}</div>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+              
+              <div style="position: absolute; right: 2%; top: 2%; text-align: center;">
+                <div style="font-size: ${baseSize * 3}px; margin-bottom: 8px; filter: ${checkpointStatus[5] ? 'none' : 'grayscale(100%)'};">🚪</div>
+                <div style="font-size: ${baseSize * 0.75}px; font-weight: 700; color: ${checkpointStatus[5] ? primaryColor : textColor}; opacity: ${checkpointStatus[5] ? '1' : '0.4'};">FINISH<br/>Pintu Keluar</div>
+              </div>
+              
+            </div>
+          </main>
+        </div>
+      `;
+      
+      document.querySelectorAll('.checkpoint:not(.locked)').forEach(cp => {
+        cp.addEventListener('click', (e) => {
+          const index = parseInt(e.currentTarget.dataset.index);
+          currentCheckpoint = index;
+          currentSubQuestion = 0;
+          currentView = 'question';
+          renderView();
+        });
+      });
+    }
+
+    function renderQuestion() {
+      const checkpoint = checkpoints[currentCheckpoint];
+      const subQ = checkpoint.subQuestions[currentSubQuestion];
+      
+      const app = document.getElementById('app');
+      const customFont = config.font_family || defaultConfig.font_family;
+      const baseSize = config.font_size || defaultConfig.font_size;
+      const baseFontStack = 'sans-serif';
+      
+      const backgroundColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+      const secondaryColor = config.secondary_action_color || defaultConfig.secondary_action_color;
+      
+      app.style.backgroundColor = backgroundColor;
+      app.style.fontFamily = `${customFont}, ${baseFontStack}`;
+      
+      app.innerHTML = `
+        <div class="w-full h-full flex flex-col">
+          <header style="background-color: ${surfaceColor}; padding: 20px 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <div style="max-width: 1200px; margin: 0 auto; display: flex; align-items: center; gap: 16px;">
+              <button id="back-btn" style="font-size: ${baseSize * 1.5}px; background: none; border: none; cursor: pointer; padding: 8px;">←</button>
+              <div style="flex: 1;">
+                <div style="font-size: ${baseSize * 1.5}px; font-weight: 700; color: ${textColor}; margin-bottom: 4px;">${checkpoint.icon} ${checkpoint.title}</div>
+                <div style="font-size: ${baseSize * 0.875}px; color: ${textColor}; opacity: 0.7;">Sub-soal ${currentSubQuestion + 1} dari ${checkpoint.subQuestions.length}</div>
+              </div>
+            </div>
+          </header>
+          
+          <main class="flex-1 overflow-auto p-8">
+            <div class="fade-in" style="max-width: 900px; margin: 0 auto; background-color: ${surfaceColor}; padding: 32px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+              
+              ${currentSubQuestion === 0 ? `
+                <div style="background-color: ${backgroundColor}; padding: 20px; border-radius: 12px; margin-bottom: 24px; border-left: 4px solid ${primaryColor};">
+                  <p style="font-size: ${baseSize * 1.125}px; line-height: 1.6; color: ${textColor}; margin-bottom: 16px;">${checkpoint.question}</p>
+                  ${renderCheckpointData(checkpoint, baseSize, textColor, backgroundColor, primaryColor, surfaceColor)}
+                </div>
+              ` : ''}
+              
+              <div id="question-content">
+                ${renderSubQuestion(subQ, baseSize, textColor, backgroundColor, primaryColor, surfaceColor)}
+              </div>
+              
+              <div id="feedback" style="margin-top: 24px; padding: 16px; border-radius: 12px; display: none;"></div>
+              
+              <div style="margin-top: 32px; display: flex; gap: 16px; justify-content: flex-end;">
+                <button 
+                  id="submit-btn"
+                  style="background-color: ${primaryColor}; color: white; font-size: ${baseSize}px; font-weight: 600; padding: 14px 32px; border-radius: 12px; border: none; cursor: pointer; transition: all 0.3s ease;"
+                >
+                  Periksa Jawaban
+                </button>
+                <button 
+                  id="next-btn"
+                  style="background-color: ${secondaryColor}; color: white; font-size: ${baseSize}px; font-weight: 600; padding: 14px 32px; border-radius: 12px; border: none; cursor: pointer; transition: all 0.3s ease; display: none;"
+                >
+                  ${currentSubQuestion < checkpoint.subQuestions.length - 1 ? 'Sub-soal Berikutnya →' : 'Selesai Checkpoint ✓'}
+                </button>
+              </div>
+              
+            </div>
+          </main>
+        </div>
+      `;
+      
+      setupQuestionHandlers();
+    }
+
+    function renderCheckpointData(checkpoint, baseSize, textColor, backgroundColor, primaryColor, surfaceColor) {
+      if (checkpoint.tableData) {
+        return `
+          <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
+              <thead>
+                <tr style="background-color: ${primaryColor}; color: white;">
+                  <th style="padding: 12px; text-align: left; font-size: ${baseSize}px; border-radius: 8px 0 0 0;">Minggu ke-</th>
+                  <th style="padding: 12px; text-align: left; font-size: ${baseSize}px; border-radius: 0 8px 0 0;">Tinggi (cm)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${checkpoint.tableData.map((row, i) => `
+                  <tr style="background-color: ${i % 2 === 0 ? backgroundColor : 'rgba(59, 130, 246, 0.05)'};">
+                    <td style="padding: 12px; font-size: ${baseSize}px; font-weight: 600; color: ${textColor};">${row.minggu}</td>
+                    <td style="padding: 12px; font-size: ${baseSize}px; font-weight: 600; color: ${textColor};">${row.tinggi} cm</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      } else if (checkpoint.pupukList) {
+        return `
+          <div style="margin-top: 16px;">
+            <p style="font-size: ${baseSize}px; font-weight: 600; color: ${textColor}; margin-bottom: 12px;">🧪 Jenis Pewarna:</p>
+            <ul style="list-style: none; padding-left: 0; margin-bottom: 20px;">
+              ${checkpoint.pupukList.map(p => `<li style="font-size: ${baseSize * 0.9}px; padding: 6px 0; color: ${textColor};">• ${p}</li>`).join('')}
+            </ul>
+            
+            <p style="font-size: ${baseSize}px; font-weight: 600; color: ${textColor}; margin-bottom: 8px;">📄 Material Awal:</p>
+            <p style="font-size: ${baseSize * 0.9}px; color: ${textColor}; margin-bottom: 20px;">${checkpoint.tanamanAwal}</p>
+            
+            <p style="font-size: ${baseSize}px; font-weight: 600; color: ${textColor}; margin-bottom: 12px;">🧪 Percobaan:</p>
+            ${checkpoint.percobaan.map((p, i) => `
+              <div style="background-color: white; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 3px solid ${primaryColor};">
+                <p style="font-size: ${baseSize * 0.875}px; font-weight: 700; color: ${primaryColor}; margin-bottom: 6px;">${p.nama}</p>
+                <p style="font-size: ${baseSize * 0.85}px; color: ${textColor}; margin-bottom: 4px;"><strong>Botol:</strong> ${p.gelas}</p>
+                <p style="font-size: ${baseSize * 0.85}px; color: ${textColor};"><strong>Hasil:</strong> ${p.hasil}</p>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } else if (checkpoint.binerData) {
+        const visual = checkpoint.binerData.visual;
+        const posisi = checkpoint.binerData.posisi;
+        return `
+          <div style="text-align: center; margin-top: 20px;">
+            <div style="display: flex; justify-content: center; gap: 8px; margin-bottom: 16px;">
+              ${visual.map((v, i) => `
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                  <div style="font-size: ${baseSize * 2.5}px;">${v}</div>
+                  <div style="font-size: ${baseSize * 0.75}px; font-weight: 700; color: ${textColor};">${checkpoint.binerData.biner[i]}</div>
+                  <div style="font-size: ${baseSize * 0.7}px; color: ${textColor}; opacity: 0.6;">${posisi[i]}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      } else if (checkpoint.oktalData) {
+        return `
+          <div style="text-align: center; margin-top: 20px;">
+            <div style="font-size: ${baseSize * 2}px; font-weight: 700; color: ${primaryColor}; margin-bottom: 16px;">${checkpoint.oktalData.oktal}</div>
+            <div style="display: flex; justify-content: center; gap: 16px; margin-bottom: 16px;">
+              ${checkpoint.oktalData.digit.map((d, i) => `
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; background-color: white; padding: 16px; border-radius: 12px;">
+                  <div style="font-size: ${baseSize * 1.5}px; font-weight: 700; color: ${textColor};">${d}</div>
+                  <div style="font-size: ${baseSize * 0.75}px; color: ${textColor}; opacity: 0.7;">×</div>
+                  <div style="font-size: ${baseSize * 0.85}px; font-weight: 600; color: ${primaryColor};">${checkpoint.oktalData.posisi[i]}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      } else if (checkpoint.structureData) {
+        return `
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 20px;">
+            
+            <!-- LIFO Visualization -->
+            <div style="background-color: white; padding: 20px; border-radius: 12px; border: 2px solid ${primaryColor};">
+              <h3 style="font-size: ${baseSize * 1.125}px; font-weight: 700; color: ${primaryColor}; margin-bottom: 12px;">${checkpoint.structureData.lifo.title}</h3>
+              <p style="font-size: ${baseSize * 0.875}px; color: ${textColor}; margin-bottom: 16px; line-height: 1.5;">${checkpoint.structureData.lifo.description}</p>
+              
+              <div style="background-color: ${backgroundColor}; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+                <p style="font-size: ${baseSize * 0.8}px; color: ${textColor}; font-weight: 600; margin-bottom: 12px;">📝 ${checkpoint.structureData.lifo.scenario}</p>
+                
+                <!-- Stack Visual (Bottom to Top) -->
+                <div style="display: flex; flex-direction: column-reverse; align-items: center; gap: 4px; margin-top: 16px;">
+                  ${checkpoint.structureData.lifo.visual.map((plate, i) => `
+                    <div class="stack-plate" style="width: 120px; height: 50px; background: linear-gradient(135deg, ${primaryColor} 0%, #60a5fa 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: ${baseSize * 1.5}px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: relative;">
+                      ${plate}
+                      <div style="position: absolute; right: -60px; font-size: ${baseSize * 0.7}px; color: ${textColor}; white-space: nowrap;">${checkpoint.structureData.lifo.order[i]}</div>
+                    </div>
+                  `).join('')}
+                </div>
+                
+                <div style="width: 140px; height: 8px; background-color: ${textColor}; margin: 8px auto 0; border-radius: 4px;"></div>
+                <p style="text-align: center; font-size: ${baseSize * 0.7}px; color: ${textColor}; margin-top: 8px; font-weight: 600;">↑ Tumpukan (Paling atas diambil pertama)</p>
+              </div>
+              
+              <div style="background-color: #fef3c7; padding: 12px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                <p style="font-size: ${baseSize * 0.8}px; color: #92400e; font-weight: 700;">💡 Prinsip LIFO:</p>
+                <p style="font-size: ${baseSize * 0.75}px; color: #92400e; margin-top: 4px;"><strong>Last In, First Out</strong><br/>Yang terakhir masuk → keluar pertama</p>
+              </div>
+            </div>
+            
+            <!-- FIFO Visualization -->
+            <div style="background-color: white; padding: 20px; border-radius: 12px; border: 2px solid #10b981;">
+              <h3 style="font-size: ${baseSize * 1.125}px; font-weight: 700; color: #10b981; margin-bottom: 12px;">${checkpoint.structureData.fifo.title}</h3>
+              <p style="font-size: ${baseSize * 0.875}px; color: ${textColor}; margin-bottom: 16px; line-height: 1.5;">${checkpoint.structureData.fifo.description}</p>
+              
+              <div style="background-color: ${backgroundColor}; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+                <p style="font-size: ${baseSize * 0.8}px; color: ${textColor}; font-weight: 600; margin-bottom: 12px;">📝 ${checkpoint.structureData.fifo.scenario}</p>
+                
+                <!-- Queue Visual (Left to Right) -->
+                <div style="margin-top: 16px;">
+                  <div style="display: flex; align-items: center; gap: 8px; justify-content: center;">
+                    ${checkpoint.structureData.fifo.visual.map((person, i) => `
+                      <div>
+                        <div class="queue-person" style="width: 80px; height: 80px; background: linear-gradient(135deg, #10b981 0%, #34d399 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: ${baseSize * 2}px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                          ${person}
+                        </div>
+                        <p style="text-align: center; font-size: ${baseSize * 0.65}px; color: ${textColor}; margin-top: 6px; font-weight: 600;">${checkpoint.structureData.fifo.order[i]}</p>
+                      </div>
+                      ${i < checkpoint.structureData.fifo.visual.length - 1 ? '<div style="font-size: ' + (baseSize * 1.5) + 'px; color: #10b981;">→</div>' : ''}
+                    `).join('')}
+                  </div>
+                  
+                  <div style="display: flex; justify-content: space-between; margin-top: 12px;">
+                    <p style="font-size: ${baseSize * 0.7}px; color: ${textColor}; font-weight: 700;">← DEPAN (Dilayani dulu)</p>
+                    <p style="font-size: ${baseSize * 0.7}px; color: ${textColor}; font-weight: 700;">BELAKANG (Tunggu) →</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div style="background-color: #d1fae5; padding: 12px; border-radius: 8px; border-left: 4px solid #10b981;">
+                <p style="font-size: ${baseSize * 0.8}px; color: #065f46; font-weight: 700;">💡 Prinsip FIFO:</p>
+                <p style="font-size: ${baseSize * 0.75}px; color: #065f46; margin-top: 4px;"><strong>First In, First Out</strong><br/>Yang pertama masuk → keluar pertama</p>
+              </div>
+            </div>
+            
+          </div>
+        `;
+      }
+      return '';
+    }
+
+    function renderSubQuestion(subQ, baseSize, textColor, backgroundColor, primaryColor, surfaceColor) {
+      if (subQ.type === 'multiple_choice') {
+        return `
+          <p style="font-size: ${baseSize * 1.125}px; font-weight: 600; margin-bottom: 20px; color: ${textColor}; white-space: pre-line;">${subQ.question}</p>
+          ${subQ.options.map((opt, i) => `
+            <div 
+              class="choice-option"
+              data-index="${i}"
+              style="background-color: ${backgroundColor}; padding: 16px; margin-bottom: 12px; border-radius: 12px; cursor: pointer; border: 3px solid transparent; transition: all 0.3s ease;"
+            >
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="background-color: ${surfaceColor}; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: ${baseSize}px; color: ${primaryColor};">
+                  ${String.fromCharCode(65 + i)}
+                </div>
+                <span style="font-size: ${baseSize}px; color: ${textColor};">${opt}</span>
+              </div>
+            </div>
+          `).join('')}
+        `;
+      } else if (subQ.type === 'drag_drop') {
+        const shuffled = [...subQ.items].sort(() => Math.random() - 0.5);
+        return `
+          <p style="font-size: ${baseSize * 1.125}px; font-weight: 600; margin-bottom: 20px; color: ${textColor};">${subQ.question}</p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 style="font-size: ${baseSize}px; font-weight: 600; color: ${textColor};">📦 Langkah Tersedia</h3>
+                <button 
+                  id="reset-drag-drop"
+                  style="background-color: ${backgroundColor}; color: ${textColor}; font-size: ${baseSize * 0.8}px; font-weight: 600; padding: 6px 12px; border-radius: 8px; border: 2px solid ${primaryColor}; cursor: pointer;"
+                >
+                  🔄 Reset
+                </button>
+              </div>
+              <div id="drag-source" style="min-height: 200px;">
+                ${shuffled.map(item => `
+                  <div 
+                    class="draggable"
+                    data-id="${item.id}"
+                    draggable="true"
+                    style="background-color: ${primaryColor}; color: white; padding: 12px; margin-bottom: 10px; border-radius: 10px; font-size: ${baseSize * 0.9}px; font-weight: 600; cursor: grab;"
+                  >
+                    ${item.text}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            <div>
+              <h3 style="font-size: ${baseSize}px; font-weight: 600; margin-bottom: 12px; color: ${textColor};">🎯 Urutan Benar</h3>
+              <div id="drop-target">
+                ${subQ.correctOrder.map((_, index) => `
+                  <div 
+                    class="drop-zone"
+                    data-position="${index}"
+                    style="background-color: ${backgroundColor}; border: 3px dashed ${primaryColor}; padding: 16px; margin-bottom: 10px; border-radius: 10px; min-height: 50px; display: flex; align-items: center; justify-content: center; font-size: ${baseSize * 0.8}px; color: ${textColor}; opacity: 0.5;"
+                  >
+                    ${index + 1}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      return '';
+    }
+
+    function setupQuestionHandlers() {
+      const checkpoint = checkpoints[currentCheckpoint];
+      const subQ = checkpoint.subQuestions[currentSubQuestion];
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+      
+      document.getElementById('back-btn')?.addEventListener('click', () => {
+        currentView = 'maze';
+        renderView();
+      });
+      
+      document.querySelectorAll('.choice-option').forEach(opt => {
+        opt.addEventListener('click', (e) => {
+          document.querySelectorAll('.choice-option').forEach(o => o.style.borderColor = 'transparent');
+          e.currentTarget.style.borderColor = primaryColor;
+          e.currentTarget.classList.add('selected');
+        });
+      });
+      
+      if (subQ.type === 'drag_drop') {
+        setupDragDrop();
+        
+        document.getElementById('reset-drag-drop')?.addEventListener('click', () => {
+          renderView();
+        });
+      }
+      
+      document.getElementById('submit-btn')?.addEventListener('click', checkAnswer);
+      
+      document.getElementById('next-btn')?.addEventListener('click', () => {
+        if (currentSubQuestion < checkpoint.subQuestions.length - 1) {
+          currentSubQuestion++;
+          renderView();
+        } else {
+          checkpointStatus[currentCheckpoint] = true;
+          saveProgress();
+          currentView = 'maze';
+          renderView();
+        }
+      });
+    }
+
+    function setupDragDrop() {
+      const draggables = document.querySelectorAll('.draggable');
+      const dropZones = document.querySelectorAll('.drop-zone');
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+      
+      draggables.forEach(draggable => {
+        draggable.addEventListener('dragstart', (e) => {
+          e.dataTransfer.setData('text/plain', e.target.dataset.id);
+          e.target.classList.add('dragging');
+        });
+        
+        draggable.addEventListener('dragend', (e) => {
+          e.target.classList.remove('dragging');
+        });
+      });
+      
+      dropZones.forEach(zone => {
+        zone.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          zone.classList.add('drag-over');
+        });
+        
+        zone.addEventListener('dragleave', () => {
+          zone.classList.remove('drag-over');
+        });
+        
+        zone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          zone.classList.remove('drag-over');
+          
+          const id = e.dataTransfer.getData('text/plain');
+          const sourceItem = document.querySelector(`#drag-source [data-id="${id}"]`);
+          
+          if (!sourceItem) return;
+          
+          const existingItem = zone.querySelector('.draggable');
+          if (existingItem) {
+            const sourceContainer = document.getElementById('drag-source');
+            existingItem.style.display = 'block';
+            sourceContainer.appendChild(existingItem);
+          }
+          
+          const clonedItem = sourceItem.cloneNode(true);
+          clonedItem.style.cursor = 'default';
+          clonedItem.draggable = false;
+          
+          zone.innerHTML = '';
+          zone.style.opacity = '1';
+          zone.appendChild(clonedItem);
+          
+          sourceItem.style.display = 'none';
+        });
+      });
+    }
+
+    async function checkAnswer() {
+      const checkpoint = checkpoints[currentCheckpoint];
+      const subQ = checkpoint.subQuestions[currentSubQuestion];
+      const feedback = document.getElementById('feedback');
+      const submitBtn = document.getElementById('submit-btn');
+      const nextBtn = document.getElementById('next-btn');
+      const baseSize = config.font_size || defaultConfig.font_size;
+      
+      let isCorrect = false;
+      let userAnswer = null;
+      let errorDetail = '';
+      
+      if (subQ.type === 'multiple_choice') {
+        const selected = document.querySelector('.choice-option.selected');
+        if (!selected) {
+          showWarning(feedback, baseSize, "⚠️ Pilih salah satu jawaban terlebih dahulu!");
+          return;
+        }
+        
+        const selectedIndex = parseInt(selected.dataset.index);
+        userAnswer = selectedIndex.toString();
+        isCorrect = selectedIndex === subQ.correctAnswer;
+        
+        if (!isCorrect) {
+          errorDetail = subQ.errorExplanation || `Jawaban yang kamu pilih adalah: <strong>"${subQ.options[selectedIndex]}"</strong><br><br>❌ Ini belum tepat. Coba perhatikan kembali data dan pola yang ada.`;
+        }
+      } else if (subQ.type === 'drag_drop') {
+        const dropZones = document.querySelectorAll('.drop-zone');
+        const userOrder = Array.from(dropZones).map(zone => {
+          const item = zone.querySelector('.draggable');
+          return item ? item.dataset.id : null;
+        });
+        
+        if (userOrder.some(id => id === null)) {
+          showWarning(feedback, baseSize, "⚠️ Lengkapi semua posisi terlebih dahulu!");
+          return;
+        }
+        
+        userAnswer = userOrder.join(',');
+        isCorrect = JSON.stringify(userOrder) === JSON.stringify(subQ.correctOrder);
+        
+        if (!isCorrect) {
+          errorDetail = subQ.errorExplanation || "Urutan yang kamu susun belum tepat. Coba perhatikan kembali langkah-langkahnya.";
+        }
+      }
+      
+      feedback.style.display = 'block';
+      
+      if (isCorrect) {
+        feedback.style.backgroundColor = '#d1fae5';
+        feedback.style.border = '2px solid #10b981';
+        feedback.innerHTML = `
+          <div style="display: flex; align-items: start; gap: 12px;">
+            <div style="font-size: ${baseSize * 1.5}px;">✅</div>
+            <div style="flex: 1;">
+              <p style="font-size: ${baseSize * 1.1}px; color: #065f46; font-weight: 700; margin-bottom: 8px;">Jawaban Benar!</p>
+              ${currentSubQuestion === checkpoint.subQuestions.length - 1 ? `
+                <div style="background-color: rgba(16, 185, 129, 0.1); padding: 16px; border-radius: 8px; margin-top: 12px;">
+                  <p style="font-size: ${baseSize * 0.875}px; color: #047857; font-weight: 700; margin-bottom: 8px;">📚 Materi Pembelajaran:</p>
+                  <p style="font-size: ${baseSize * 0.9}px; color: #047857; white-space: pre-line; line-height: 1.6;">${checkpoint.explanation}</p>
+                </div>
+              ` : `
+                <p style="font-size: ${baseSize * 0.9}px; color: #047857; margin-top: 8px;">Bagus! Lanjut ke sub-soal berikutnya.</p>
+              `}
+            </div>
+          </div>
+        `;
+        
+        submitBtn.style.display = 'none';
+        nextBtn.style.display = 'block';
+        
+        const result = await window.dataSdk.create({
+          question_id: checkpoint.id + '_sub' + currentSubQuestion,
+          student_answer: userAnswer,
+          is_correct: isCorrect,
+          timestamp: new Date().toISOString()
+        });
+        
+        if (result.isError) {
+          console.error('Failed to save answer');
+        }
+      } else {
+        feedback.style.backgroundColor = '#fee2e2';
+        feedback.style.border = '2px solid #ef4444';
+        feedback.innerHTML = `
+          <div style="display: flex; align-items: start; gap: 12px;">
+            <div style="font-size: ${baseSize * 1.5}px;">❌</div>
+            <div style="flex: 1;">
+              <p style="font-size: ${baseSize * 1.1}px; color: #991b1b; font-weight: 700; margin-bottom: 8px;">Jawaban Belum Tepat</p>
+              <p style="font-size: ${baseSize * 0.9}px; color: #b91c1c; line-height: 1.6;">${errorDetail}</p>
+              <button 
+                id="try-again-btn"
+                style="margin-top: 12px; background-color: #ef4444; color: white; font-size: ${baseSize * 0.875}px; font-weight: 600; padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer;"
+              >
+                🔄 Coba Lagi
+              </button>
+            </div>
+          </div>
+        `;
+        
+        setTimeout(() => {
+          document.getElementById('try-again-btn')?.addEventListener('click', () => {
+            feedback.style.display = 'none';
+            document.querySelectorAll('.choice-option').forEach(opt => {
+              opt.classList.remove('selected');
+              opt.style.borderColor = 'transparent';
+            });
+          });
+        }, 100);
+      }
+    }
+
+    function showWarning(feedback, baseSize, message) {
+      feedback.style.display = 'block';
+      feedback.style.backgroundColor = '#fef3c7';
+      feedback.style.border = '2px solid #f59e0b';
+      feedback.innerHTML = `<p style="font-size: ${baseSize}px; color: #92400e; font-weight: 600;">${message}</p>`;
+    }
+
+    async function saveProgress() {
+      const result = await window.dataSdk.create({
+        question_id: 'checkpoint_' + currentCheckpoint,
+        student_answer: 'completed',
+        is_correct: true,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    async function onConfigChange(newConfig) {
+      config = newConfig;
+      renderView();
+    }
+
+    const dataHandler = {
+      onDataChanged(data) {
+        userAnswers = data;
+      }
+    };
+
+    async function init() {
+      if (window.dataSdk) {
+        const initResult = await window.dataSdk.init(dataHandler);
+        if (!initResult.isOk) {
+          console.error("Failed to initialize data SDK");
+        }
+      }
+      
+      if (window.elementSdk) {
+        window.elementSdk.init({
+          defaultConfig,
+          onConfigChange,
+          mapToCapabilities: (cfg) => ({
+            recolorables: [
+              {
+                get: () => cfg.background_color || defaultConfig.background_color,
+                set: (value) => {
+                  cfg.background_color = value;
+                  window.elementSdk.setConfig({ background_color: value });
+                }
+              },
+              {
+                get: () => cfg.surface_color || defaultConfig.surface_color,
+                set: (value) => {
+                  cfg.surface_color = value;
+                  window.elementSdk.setConfig({ surface_color: value });
+                }
+              },
+              {
+                get: () => cfg.text_color || defaultConfig.text_color,
+                set: (value) => {
+                  cfg.text_color = value;
+                  window.elementSdk.setConfig({ text_color: value });
+                }
+              },
+              {
+                get: () => cfg.primary_action_color || defaultConfig.primary_action_color,
+                set: (value) => {
+                  cfg.primary_action_color = value;
+                  window.elementSdk.setConfig({ primary_action_color: value });
+                }
+              },
+              {
+                get: () => cfg.secondary_action_color || defaultConfig.secondary_action_color,
+                set: (value) => {
+                  cfg.secondary_action_color = value;
+                  window.elementSdk.setConfig({ secondary_action_color: value });
+                }
+              }
+            ],
+            borderables: [],
+            fontEditable: {
+              get: () => cfg.font_family || defaultConfig.font_family,
+              set: (value) => {
+                cfg.font_family = value;
+                window.elementSdk.setConfig({ font_family: value });
+              }
+            },
+            fontSizeable: {
+              get: () => cfg.font_size || defaultConfig.font_size,
+              set: (value) => {
+                cfg.font_size = value;
+                window.elementSdk.setConfig({ font_size: value });
+              }
+            }
+          }),
+          mapToEditPanelValues: (cfg) => new Map([
+            ["main_title", cfg.main_title || defaultConfig.main_title],
+            ["subtitle", cfg.subtitle || defaultConfig.subtitle],
+            ["instruction_text", cfg.instruction_text || defaultConfig.instruction_text],
+            ["completion_message", cfg.completion_message || defaultConfig.completion_message]
+          ])
+        });
+        
+        config = window.elementSdk.config;
+      }
+      
+      initializeApp();
+    }
+
+    init();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b6047bce6084083',t:'MTc2NzA4NDUyOC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
